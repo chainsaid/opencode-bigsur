@@ -104,7 +104,7 @@ const getBase = (appId: string): Configuration => ({
     {
       from: "resources/",
       to: "",
-      filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version"],
+      filter: ["opencode-cli", "opencode-cli.exe", "opencode-cli.version", "shim_libicucore.dylib"],
     },
   ],
   afterPack: async (context) => {

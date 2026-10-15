@@ -8,7 +8,9 @@ import { collectFiles } from "./files"
 export async function buildAppArchive(channel: string, options?: { skipBuild?: boolean }) {
   if (options?.skipBuild) return AppArchive.encode([])
   const root = path.resolve(import.meta.dirname, "../../app")
-  await $`bun run build`
+  // Big Sur：系统 node 为 18，vite 底层 rolldown 需要 node 20+ 的 node:util.styleText；
+  // 用 bun runtime 执行 web UI 构建（bun 1.4.3 已具备该导出）。
+  await $`bun run --bun build`
     .cwd(root)
     .env({ ...process.env, OPENCODE_CHANNEL: channel, VITE_OPENCODE_SERVER_MODE: "origin" })
   return AppArchive.encode(

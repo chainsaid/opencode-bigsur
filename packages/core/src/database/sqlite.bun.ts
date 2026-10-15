@@ -1,9 +1,28 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite"
+import { existsSync } from "node:fs"
 import { Context, Effect, Layer } from "effect"
 import { Reactivity } from "effect/reactivity"
 import { SqlClient } from "effect/sql"
 import { classifySqliteError, SqlError } from "effect/sql/SqlError"
 import { Sqlite } from "./sqlite.js"
+
+// macOS: bun ships a bundled SQLite (3.32.x) that predates RETURNING (needs >= 3.35),
+// which opencode relies on via drizzle `.returning()`. Point bun:sqlite at a full
+// system SQLite (e.g. Homebrew) BEFORE any database is opened — bun exposes this via
+// `Database.setCustomSQLite(path)` and it can only be set before SQLite is loaded.
+// Override the library path with OPENCODE_SQLITE_LIB; falls back to bun's bundled
+// SQLite when the library is absent or the API is unavailable (older bun).
+try {
+  if (
+    process.platform === "darwin" &&
+    typeof (Database as { setCustomSQLite?: unknown }).setCustomSQLite === "function"
+  ) {
+    const lib = process.env.OPENCODE_SQLITE_LIB ?? "/usr/local/opt/sqlite/lib/libsqlite3.0.dylib"
+    if (existsSync(lib)) (Database as unknown as { setCustomSQLite: (path: string) => void }).setCustomSQLite(lib)
+  }
+} catch {
+  // ignore: keep using bun's bundled SQLite
+}
 
 const TypeId = "~@opencode/core/database/SqliteBun" as const
 

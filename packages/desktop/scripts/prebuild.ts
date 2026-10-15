@@ -13,10 +13,13 @@ await $`bun ./scripts/copy-icons.ts ${channel}`
 
 await $`bun ./scripts/copy-metainfo.ts ${channel}`
 
-if (channel === "dev") await downloadCliToResources()
-
-if ((channel === "beta" || channel === "prod") && Bun.env.OPENCODE_CLI_DIST) {
+// When a locally-built CLI distribution is provided (e.g. a Big Sur-compatible
+// build), use it for every channel instead of downloading the published binary.
+// This keeps the desktop build self-contained and free of post-build patching.
+if (Bun.env.OPENCODE_CLI_DIST) {
   await copyBuiltCliToResources(Bun.env.OPENCODE_CLI_DIST)
+} else if (channel === "dev") {
+  await downloadCliToResources()
+} else if (channel === "beta") {
+  await downloadCliToResources("beta")
 }
-
-if (channel === "beta" && !Bun.env.OPENCODE_CLI_DIST) await downloadCliToResources("beta")

@@ -14,7 +14,7 @@ import { nodeExecArgv, nodeTarget, type NodeTarget } from "../src/node/target"
 import { buildAppArchive } from "./app-assets"
 import { verifyArtifact } from "./verify-artifact"
 
-const NODE_VERSION = "26.4.0"
+const NODE_VERSION = "22.23.3"
 const dir = path.resolve(import.meta.dirname, "..")
 const outdir = path.resolve(
   dir,

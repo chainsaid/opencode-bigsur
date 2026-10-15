@@ -144,19 +144,31 @@ const installCli = Effect.fn("DesktopCli.install")(function* (source: string, ve
 
   if (existsSync(destination)) {
     yield* Effect.logInfo("v2 CLI staged executable reused", { path: destination, version })
+  } else {
+    const temp = destination + `.${process.pid}.tmp`
+    yield* fs.makeDirectory(directory, { recursive: true })
+    yield* fs.copyFile(source, temp)
 
-    return destination
+    if (process.platform !== "win32") yield* fs.chmod(temp, 0o755)
+    yield* fs
+      .rename(temp, destination)
+      .pipe(Effect.catch((error) => fs.remove(temp, { force: true }).pipe(Effect.andThen(Effect.fail(error)))))
+    yield* Effect.logInfo("v2 CLI executable staged", { source, path: destination, version })
   }
 
-  const temp = destination + `.${process.pid}.tmp`
-  yield* fs.makeDirectory(directory, { recursive: true })
-  yield* fs.copyFile(source, temp)
-
-  if (process.platform !== "win32") yield* fs.chmod(temp, 0o755)
-  yield* fs
-    .rename(temp, destination)
-    .pipe(Effect.catch((error) => fs.remove(temp, { force: true }).pipe(Effect.andThen(Effect.fail(error)))))
-  yield* Effect.logInfo("v2 CLI executable staged", { source, path: destination, version })
+  // The CLI build bundles an ICU shim beside the executable and references it via
+  // @loader_path so it runs on macOS < 12. Stage that shim into this directory too,
+  // otherwise dyld cannot resolve it once the binary leaves the app bundle. The CLI
+  // entitlement disables library validation, so the ad-hoc-signed shim loads fine.
+  if (process.platform === "darwin") {
+    const shimSource = path.join(path.dirname(source), "shim_libicucore.dylib")
+    const shimDestination = path.join(directory, "shim_libicucore.dylib")
+    if (existsSync(shimSource) && !existsSync(shimDestination)) {
+      yield* fs.copyFile(shimSource, shimDestination)
+      yield* fs.chmod(shimDestination, 0o755)
+      yield* Effect.logInfo("v2 CLI ICU shim staged", { path: shimDestination })
+    }
+  }
 
   return destination
 })

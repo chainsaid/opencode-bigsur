@@ -103,6 +103,12 @@ export async function copyBuiltCliToResources(root: string, dest = windowsify("r
 async function copyCliToResources(pkg: string, dest: string) {
   const cli = getCurrentCli()
   await copyFile(join(pkg, "bin", cli.os === "win32" ? "opencode.exe" : "opencode"), dest)
+  // The CLI build places a Big Sur ICU shim next to the binary; bundle it alongside
+  // the executable so its @loader_path reference resolves at runtime.
+  const shimSrc = join(pkg, "bin", "shim_libicucore.dylib")
+  if (cli.os === "darwin" && (await Bun.file(shimSrc).exists())) {
+    await copyFile(shimSrc, join(dirname(dest), "shim_libicucore.dylib"))
+  }
   await prepareCli(dest)
   const manifest = (await Bun.file(join(pkg, "package.json")).json()) as { version?: string }
 
@@ -121,7 +127,11 @@ async function prepareCli(dest: string) {
     await $`pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ../../script/sign-windows.ps1 ${dest}`
   }
 
-  if (process.platform === "darwin") await $`codesign --force --sign - ${dest}`
+  if (process.platform === "darwin") {
+    await $`codesign --force --sign - ${dest}`
+    const shim = join(dirname(dest), "shim_libicucore.dylib")
+    if (await Bun.file(shim).exists()) await $`codesign --force --sign - ${shim}`
+  }
 }
 
 export function windowsify(path: string) {

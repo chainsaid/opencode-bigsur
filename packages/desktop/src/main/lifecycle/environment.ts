@@ -1,5 +1,5 @@
 import http from "node:http"
-import { getCACertificates, setDefaultCACertificates } from "node:tls"
+import * as tls from "node:tls"
 import { app } from "electron"
 import { Effect, Path } from "effect"
 import { DesktopPaths } from "../paths"
@@ -51,14 +51,18 @@ export const loadProxyEnvironment = Effect.gen(function* () {
   yield* Effect.try(() => {
     ensureLoopbackNoProxy()
     // Electron 41.2 has a newer Node API than the current @types/node package.
-    const proxyAwareHttp = http as typeof http & { setGlobalProxyFromEnv(): void }
-    proxyAwareHttp.setGlobalProxyFromEnv()
+    // Electron 37 (Big Sur) 的 Node 较旧，没有 setGlobalProxyFromEnv，缺失则跳过。
+    const proxyAwareHttp = http as typeof http & { setGlobalProxyFromEnv?: () => void }
+    proxyAwareHttp.setGlobalProxyFromEnv?.()
   }).pipe(Effect.catch((error) => Effect.logWarning("failed to load proxy environment", { error })))
 })
 
 const loadSystemCertificates = Effect.try({
   try: () => {
-    setDefaultCACertificates([...new Set([...getCACertificates("default"), ...getCACertificates("system")])])
+    // Electron 37 内置 Node 较旧：setDefaultCACertificates 为 Node 22.15+ API，缺失则跳过
+    // （不合并系统 CA）。用 namespace import + 特性检测，避免引用不存在的导出导致模块加载失败。
+    if (typeof tls.setDefaultCACertificates !== "function" || typeof tls.getCACertificates !== "function") return
+    tls.setDefaultCACertificates([...new Set([...tls.getCACertificates("default"), ...tls.getCACertificates("system")])])
   },
   catch: (error) => error,
 }).pipe(Effect.catch((error) => Effect.logWarning("failed to load system certificates", { error })))

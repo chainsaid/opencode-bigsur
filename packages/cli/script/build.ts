@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { mkdir, rm } from "fs/promises"
+import { chmod, copyFile, mkdir, rm } from "fs/promises"
+import { homedir } from "node:os"
 import path from "path"
 import { Script } from "@opencode/script"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
@@ -200,6 +201,12 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     for (const log of result.logs) console.error(log)
     process.exit(1)
   }
+  // macOS < 12 (Big Sur) ships an ICU too old for the compiled binary's symbols,
+  // so bundle a shim and repoint the load path. This makes the produced binary
+  // self-contained: the shim sits next to it under @loader_path.
+  if (item.os === "darwin") {
+    await applyBigSurIcuShim(path.join(outdir, name, "bin", binary))
+  }
   verifySimulationGraph(simulationInputs)
 
   await Bun.write(
@@ -218,6 +225,25 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
     ),
   )
   await verifyArtifact(path.join(outdir, name))
+}
+
+// Repoint the binary's ICU dependency to a bundled shim so it runs on macOS < 12
+// (Big Sur), whose system libicucore is too old for the symbols bun compiled against.
+// The shim is copied next to the binary and referenced via @loader_path so the artifact
+// is self-contained whether run standalone or bundled inside the desktop app.
+async function applyBigSurIcuShim(binaryPath: string) {
+  const shimSrc = Bun.env.OPENCODE_ICU_SHIM ?? path.join(homedir(), ".bun", "lib", "shim_libicucore.dylib")
+  if (!(await Bun.file(shimSrc).exists())) {
+    console.warn(
+      `ICU shim not found at ${shimSrc}; skipping. Set OPENCODE_ICU_SHIM to bundle it for macOS < 12.`,
+    )
+    return
+  }
+  const shimDest = path.join(path.dirname(binaryPath), "shim_libicucore.dylib")
+  await copyFile(shimSrc, shimDest)
+  await chmod(binaryPath, 0o755)
+  await $`install_name_tool -change /usr/lib/libicucore.A.dylib @loader_path/shim_libicucore.dylib ${binaryPath}`
+  console.log(`bundled Big Sur ICU shim -> ${shimDest}`)
 }
 
 async function compileExecutable(item: (typeof allTargets)[number]) {
