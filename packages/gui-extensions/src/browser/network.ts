@@ -50,7 +50,7 @@ export const createBrowserNetwork = Effect.fn("BrowserNetwork.create")(function*
     attach(contents: WebContents) {
       const login = (
         event: Electron.Event,
-        _details: Electron.AuthenticationResponseDetails,
+        _details: Electron.LoginAuthenticationResponseDetails,
         auth: Electron.AuthInfo,
         callback: (username?: string, password?: string) => void,
       ) => {

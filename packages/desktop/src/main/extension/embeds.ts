@@ -134,9 +134,6 @@ export function createEmbeds() {
       view.setVisible(false)
       window.contentView.addChildView(view)
       corners.forEach((corner) => {
-        // Painting above a WebContentsView needs a composited layer; a zero blur creates one
-        // without an animated bounds update.
-        corner.setBackgroundBlur(0)
         corner.setVisible(false)
         window.contentView.addChildView(corner)
       })
